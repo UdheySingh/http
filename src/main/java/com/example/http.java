@@ -11,6 +11,8 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Date;
 import java.util.StringTokenizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,7 +23,7 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 // Each Client Connection will be managed in a dedicated Thread
 public class http implements Runnable{ 
 	
-	static final File WEB_ROOT = new File("http/src/main/java/com/example/resources");
+	static final File WEB_ROOT = new File("./src/main/java/com/example/resources");
 	static final String DEFAULT_FILE = "index.html";
 	static final String DEFAULT_FILE_XML = "classe.xml";
 	static final String DEFAULT_FILE_JSON = "puntiVendita.json";
@@ -111,33 +113,56 @@ public class http implements Runnable{
 				dataOut.flush();
 				
 			} else {
+				byte[] fileData = null;
+				int fileLength = 0;
 				// GET or HEAD method
 				if (fileRequested.endsWith("/")) {
 					fileRequested += DEFAULT_FILE;
 				}
-				else if (fileRequested.endsWith("/classe.json")) 
+				if (fileRequested.endsWith("/classe.json")) 
 				{
 					//deserializzazione xml to root
-					/*fileRequested = DEFAULT_FILE_XML;*/
-					File file = new File("http/src/main/java/com/example/resources");
+					//1) Leggere il file "classe.xml" (vedi allegato) dal disco e memorizzarlo in una variabile String
+					String classe = new String(Files.readAllBytes(Paths.get("./src/main/java/com/example/resources/classe.xml")));
     				XmlMapper xmlMapper = new XmlMapper();
-    				root value = xmlMapper.readValue(file, root.class);
+    				root value = xmlMapper.readValue(classe, root.class);
 
 					//serializzazione root to json
-					ObjectMapper json_Mapper = new ObjectMapper();
-					File classe_json = new File(json_Mapper.writerWithDefaultPrettyPrinter().writeValueAsString(value));
-					fileRequested = "classe.json";
+					//Root2 deserializedData = xmlMapper.readValue(classe, Root2.class);
+					ObjectMapper json_mapper = new ObjectMapper();
+                    String classe_jsonString = json_mapper.writeValueAsString(value);
+					fileLength = classe_jsonString.length();
+                    fileData = classe_jsonString.getBytes();
 				}
 				else if (fileRequested.endsWith("/punti-vendita.xml")) {
-					fileRequested = DEFAULT_FILE_JSON;
+					
+
+					//1) Leggere il file "puntiVendita.json" (vedi allegato) dal disco e memorizzarlo in una variabile String
+					String puntiVendita = new String(Files.readAllBytes(Paths.get("./src/main/java/com/example/resources/puntiVendita.json")));
+					//2) Deserializzare la stringa in un'array di classi (POJO) di tipo "PuntoVendita" (Root2)
+					ObjectMapper json_mapper = new ObjectMapper();
+					Root2 value = json_mapper.readValue(puntiVendita, Root2.class);
+
+					//3) Serializzare l'array di classi "PuntoVendita" in formato XML
+					XmlMapper xmlMapper = new XmlMapper();
+					String pv_xmlString = xmlMapper.writeValueAsString(value);
+					fileLength = pv_xmlString.length();
+                    fileData = pv_xmlString.getBytes();
+
+					//4) Restituire l'XML impostando il giusto "content-type" header
+
+
+
+
+				} else {
+					File file = new File(WEB_ROOT, fileRequested);
+					fileLength = (int) file.length();
+					fileData = readFileData(file, fileLength);
 				}
 				
-				File file = new File(WEB_ROOT, fileRequested);
-				int fileLength = (int) file.length();
 				String content = getContentType(fileRequested);
 				
 				if (method.equals("GET")) { // GET method so we return content
-					byte[] fileData = readFileData(file, fileLength);
 					
 					// send HTTP Headers
 					out.println("HTTP/1.1 200 OK");
